@@ -1,7 +1,14 @@
 services:
   mycall-server:
-    build: .
+    build:
+      context: ./server
     ports:
       - "8081:8081"
     environment:
       SPRING_PROFILES_ACTIVE: "default"
+
+  mycall-client:
+    build:
+      context: ./client
+    ports:
+      - "8082:8080" # если клиенту нужен порт (например, для UI)
