@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>resh.connect</groupId>
 	<artifactId>mycall</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>0.0.1</version>
 	<packaging>pom</packaging>
 	<name>mycall</name>
 	<description>Project for Spring Boot</description>
