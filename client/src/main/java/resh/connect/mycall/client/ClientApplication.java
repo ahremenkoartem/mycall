@@ -7,6 +7,8 @@ import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.image.Image;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import resh.connect.mycall.client.model.Participant;
@@ -16,18 +18,20 @@ import java.util.concurrent.*;
 
 public class ClientApplication extends Application {
 
-    private TextField ipField, keyField, nicknameField;
+    private TextField ipField, portField, keyField, nicknameField;
     private ChoiceBox<String> roomChoiceBox;
     private ToggleButton micToggle, roomConnectButton;
     private ListView<Participant> participantsList;
     private Label statusLabel;
     private Button serverConnectButton;
+    private Label connectedRoomLabel;
 
     private ObservableList<String> availableRooms = FXCollections.observableArrayList();
     private ObservableList<Participant> participants = FXCollections.observableArrayList();
 
     private boolean serverConnected = false;
     private boolean roomConnected = false;
+    private String connectedRoom = null; // Комната, к которой реально подключены
 
     private ScheduledExecutorService scheduler;
 
@@ -35,8 +39,29 @@ public class ClientApplication extends Application {
     public void start(Stage primaryStage) {
         primaryStage.setTitle("MyCall Client");
 
+        // Установка иконки приложения
+        Image appIcon = new Image(getClass().getResourceAsStream("/resh.ico"));
+        primaryStage.getIcons().add(appIcon);
+        // Дополнительно устанавливаем иконку для панели задач Windows через AWT Taskbar API
+        if (java.awt.Taskbar.isTaskbarSupported()) {
+            java.awt.Taskbar taskbar = java.awt.Taskbar.getTaskbar();
+            try {
+                java.awt.Image awtImage = java.awt.Toolkit.getDefaultToolkit().getImage(getClass().getResource("/resh.ico"));
+                taskbar.setIconImage(awtImage);
+            } catch (Exception e) {
+                System.err.println("Ошибка установки иконки в панель задач: " + e.getMessage());
+            }
+        }
+
         ipField = new TextField();
         ipField.setPromptText("IP сервера");
+        ipField.setPrefWidth(200);
+
+        portField = new TextField();
+        portField.setPromptText("Порт");
+        portField.setPrefWidth(80);
+
+        HBox ipPortBox = new HBox(10, ipField, portField);
 
         keyField = new TextField();
         keyField.setPromptText("Ключ подключения");
@@ -67,6 +92,10 @@ public class ClientApplication extends Application {
         roomConnectButton = new ToggleButton("Подключиться к комнате");
         roomConnectButton.setDisable(true);
 
+        connectedRoomLabel = new Label();
+
+        HBox roomControlBox = new HBox(10, roomConnectButton, connectedRoomLabel);
+
         participantsList = new ListView<>();
         participantsList.setItems(participants);
 
@@ -89,12 +118,13 @@ public class ClientApplication extends Application {
         VBox root = new VBox(10);
         root.setPadding(new Insets(15));
         root.getChildren().addAll(
-                new Label("IP адрес:"), ipField,
+                new Label("IP адрес и порт:"),
+                ipPortBox,
                 new Label("Ключ:"), keyField,
                 new Label("Никнейм:"), nicknameField,
                 serverConnectButton,
                 new Label("Выберите комнату:"), roomChoiceBox,
-                roomConnectButton,
+                roomControlBox,
                 new Label("Участники:"), participantsList,
                 micToggle,
                 statusLabel);
@@ -115,6 +145,13 @@ public class ClientApplication extends Application {
             }
         });
 
+        roomChoiceBox.getSelectionModel().selectedItemProperty().addListener((obs, oldRoom, newRoom) -> {
+            // Обновление списка участников для выбранной комнаты (независимо от подключения)
+            if (serverConnected && newRoom != null) {
+                updateParticipantsForRoom(newRoom);
+            }
+        });
+
         Scene scene = new Scene(root, 450, 600);
         primaryStage.setScene(scene);
         primaryStage.show();
@@ -122,11 +159,21 @@ public class ClientApplication extends Application {
 
     private void connectToServer() {
         String ip = ipField.getText().trim();
+        String port = portField.getText().trim();
         String key = keyField.getText().trim();
         String nickname = nicknameField.getText().trim();
 
-        if (ip.isEmpty() || key.isEmpty() || nickname.isEmpty()) {
-            statusLabel.setText("Заполните IP, ключ и никнейм.");
+        if (ip.isEmpty() || port.isEmpty() || key.isEmpty() || nickname.isEmpty()) {
+            statusLabel.setText("Заполните IP, порт, ключ и никнейм.");
+            return;
+        }
+
+        int portNumber;
+        try {
+            portNumber = Integer.parseInt(port);
+            if (portNumber < 1 || portNumber > 65535) throw new NumberFormatException();
+        } catch (NumberFormatException e) {
+            statusLabel.setText("Некорректный номер порта.");
             return;
         }
 
@@ -136,10 +183,10 @@ public class ClientApplication extends Application {
 
         loadRoomsFromServer();
         roomConnectButton.setDisable(false);
-        statusLabel.setText("Подключен к серверу " + ip + " как " + nickname);
+        statusLabel.setText("Подключен к серверу " + ip + ":" + port + " как " + nickname);
 
-        // Блокируем поля для предотвращения редактирования после подключения
         ipField.setDisable(true);
+        portField.setDisable(true);
         keyField.setDisable(true);
         nicknameField.setDisable(true);
 
@@ -158,6 +205,8 @@ public class ClientApplication extends Application {
         roomConnectButton.setDisable(true);
         roomConnectButton.setSelected(false);
         roomConnectButton.setText("Подключиться к комнате");
+        connectedRoomLabel.setText("");
+
         micToggle.setVisible(false);
         micToggle.setDisable(true);
         micToggle.setSelected(false);
@@ -165,8 +214,8 @@ public class ClientApplication extends Application {
         availableRooms.clear();
         statusLabel.setText("Отключен от сервера");
 
-        // Разблокируем поля при отключении для возможности редактирования
         ipField.setDisable(false);
+        portField.setDisable(false);
         keyField.setDisable(false);
         nicknameField.setDisable(false);
     }
@@ -178,7 +227,10 @@ public class ClientApplication extends Application {
             return;
         }
         roomConnected = true;
+        connectedRoom = room;
         roomConnectButton.setText("Отключиться от комнаты");
+        updateConnectedRoomLabel();
+
         statusLabel.setText("Подключен к комнате '" + room + "'");
 
         micToggle.setVisible(true);
@@ -190,7 +242,10 @@ public class ClientApplication extends Application {
 
     private void disconnectFromRoom() {
         roomConnected = false;
+        connectedRoom = null;
         roomConnectButton.setText("Подключиться к комнате");
+        updateConnectedRoomLabel();
+
         participants.clear();
         statusLabel.setText("Отключен от комнаты");
 
@@ -200,11 +255,20 @@ public class ClientApplication extends Application {
         disableMicrophone();
     }
 
+    private void updateConnectedRoomLabel() {
+        if (connectedRoom != null && roomConnected) {
+            connectedRoomLabel.setText(" (Подключен к: " + connectedRoom + ")");
+        } else {
+            connectedRoomLabel.setText("");
+        }
+    }
+
     private void loadRoomsFromServer() {
         availableRooms.clear();
         availableRooms.addAll("Главная", "Комната 1", "Комната 2", "Свободный чат");
         if (!availableRooms.isEmpty()) {
             roomChoiceBox.setValue(availableRooms.get(0));
+            updateParticipantsForRoom(availableRooms.get(0));
         }
     }
 
@@ -212,18 +276,26 @@ public class ClientApplication extends Application {
         scheduler = Executors.newSingleThreadScheduledExecutor();
         scheduler.scheduleAtFixedRate(() -> {
             if (!serverConnected) return;
-            String selectedRoom = roomChoiceBox.getValue();
-            if (selectedRoom == null) return;
+            String viewedRoom = roomChoiceBox.getValue();
+            if (viewedRoom == null) return;
 
-            List<Participant> updatedParticipants = simulateServerParticipants(selectedRoom);
+            List<Participant> updatedParticipants = simulateServerParticipants(viewedRoom);
 
             Platform.runLater(() -> {
-                if (selectedRoom.equals(roomChoiceBox.getValue())) {
+                if (viewedRoom.equals(roomChoiceBox.getValue())) {
                     participants.setAll(updatedParticipants);
-                    statusLabel.setText("Обновлён список участников комнаты '" + selectedRoom + "'");
+                    statusLabel.setText("Обновлён список участников комнаты '" + viewedRoom + "'");
                 }
             });
         }, 0, 5, TimeUnit.SECONDS);
+    }
+
+    private void updateParticipantsForRoom(String room) {
+        Platform.runLater(() -> {
+            List<Participant> updatedParticipants = simulateServerParticipants(room);
+            participants.setAll(updatedParticipants);
+            statusLabel.setText("Обновлён список участников комнаты '" + room + "'");
+        });
     }
 
     private void stopParticipantsAutoUpdate() {
@@ -259,7 +331,8 @@ public class ClientApplication extends Application {
             ));
         }
 
-        if (roomConnected) {
+        // Добавляем себя только если просматриваем комнату подключения
+        if (roomConnected && connectedRoom != null && room.equals(connectedRoom)) {
             String myNick = nicknameField.getText().trim();
             boolean myMicStatus = micToggle.isSelected();
             boolean containsMe = baseParticipants.stream().anyMatch(p -> p.getNickname().equals(myNick));
@@ -268,6 +341,7 @@ public class ClientApplication extends Application {
             }
         }
 
+        // Случайно добавляем нового участника
         if (rand.nextBoolean()) {
             baseParticipants.add(new Participant("Новый участник " + rand.nextInt(100), rand.nextBoolean()));
         }
