@@ -72,7 +72,14 @@
                     </execution>
                 </executions>
             </plugin>
-
+            <plugin>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-maven-plugin</artifactId>
+                <version>0.0.8</version>
+                <configuration>
+                    <mainClass>resh.connect.mycall.client.ClientApplication</mainClass>
+                </configuration>
+            </plugin>
             <!-- jpackage Maven Plugin -->
             <plugin>
                 <groupId>org.panteleyev</groupId>
