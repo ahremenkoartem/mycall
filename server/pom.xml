@@ -5,6 +5,7 @@
         <groupId>resh.connect</groupId>
         <artifactId>mycall</artifactId>
         <version>0.0.1</version>
+        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>server</artifactId>
@@ -18,6 +19,11 @@
     </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>resh.connect</groupId>
+            <artifactId>common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <!-- Spring Boot Web и WebSocket -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -26,6 +32,10 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
         </dependency>
         <dependency>
             <groupId>junit</groupId>

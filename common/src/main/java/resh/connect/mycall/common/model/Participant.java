@@ -1,4 +1,4 @@
-package resh.connect.mycall.client.model;
+package resh.connect.mycall.common.model;
 
 public class Participant {
     private final String nickname;

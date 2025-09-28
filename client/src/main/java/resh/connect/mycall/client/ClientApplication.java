@@ -11,7 +11,7 @@ import javafx.scene.image.Image;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
-import resh.connect.mycall.client.model.Participant;
+import resh.connect.mycall.common.model.Participant;
 
 import java.util.*;
 import java.util.concurrent.*;
